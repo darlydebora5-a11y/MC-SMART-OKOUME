@@ -14,7 +14,8 @@ from PIL import Image
 from supabase import create_client
 
 # --- 🛡️ CONFIGURATION MC SMART OKOUME ---
-SUPABASE_URL = "https://supabase.co"
+# L'URL a été complétée avec ton identifiant projet unique
+SUPABASE_URL = "https://hnnnauclluoyatfscvqy.supabase.co"
 SUPABASE_KEY = "sb_publishable_8c3T0LRymg5L7hG8uv1UtA_p1wm3l7_"
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
@@ -123,17 +124,26 @@ with tab_client:
         if st.button("LANCER L'IMPRESSION", key="btn_print_final"):
             try:
                 with open(st.session_state.pdf_path, 'rb') as f:
-                    supabase.storage.from_('IMPRESSIONS').upload(
-                        path=os.path.basename(st.session_state.pdf_path),
+                    # On utilise le nom du fichier nettoyé
+                    file_name = os.path.basename(st.session_state.pdf_path)
+                    
+                    res = supabase.storage.from_('IMPRESSIONS').upload(
+                        path=file_name,
                         file=f,
                         file_options={"x-upsert": "true"}
                     )
-                st.success("✅ Envoyé au Cloud !")
+                st.success("✅ Document envoyé au Cloud !")
+                
+                # Enregistrement dans l'historique
+                new_log = pd.DataFrame([[str(uuid.uuid4())[:8], datetime.now().strftime("%H:%M"), file_name, st.session_state.nb_c + st.session_state.nb_g, st.session_state.type_p, st.session_state.final_m, "PRET"]], columns=["ID", "Heure", "Fichier", "Pages", "Type", "Montant", "Statut"])
+                pd.concat([pd.read_csv(LOG_FILE), new_log]).to_csv(LOG_FILE, index=False)
+                
                 time.sleep(2)
                 st.session_state.step = "upload"
                 st.rerun()
             except Exception as e:
-                st.error(f"Erreur d'envoi : {e}")
+                # Ceci nous dira si c'est un problème de "Bucket not found" ou "Invalid Key"
+                st.error(f"Détail technique de l'erreur : {e}")
 
 with tab_admin:
     pwd = st.text_input("Admin Password", type="password")
