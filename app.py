@@ -14,7 +14,6 @@ from supabase import create_client
 # --- 🛡️ CONFIGURATION MC SMART OKOUME ---
 SUPABASE_URL = "https://supabase.co"
 SUPABASE_KEY = "sb_publishable_8c3T0LRymg5L7hG8uv1UtA_p1wm3l7_"
-# Initialisation du client Cloud
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 TEMP_DIR = "print_queue"
@@ -23,7 +22,7 @@ LOG_FILE = "historique_impressions.csv"
 ADMIN_PASSWORD = "admin123" 
 PRIX_NB, PRIX_COULEUR = 100, 200
 
-# --- 🔍 FONCTIONS RÉCUPÉRÉES DE TON ORIGINAL ---
+# --- 🔍 FONCTIONS RÉCUPÉRÉES ---
 def auto_reparation():
     for d in [TEMP_DIR, ADS_DIR]:
         if not os.path.exists(d): os.makedirs(d)
@@ -33,11 +32,10 @@ def auto_reparation():
 def convertir_en_pdf(input_path):
     if input_path.lower().endswith(".pdf"): return input_path
     try:
-        # Commande LibreOffice pour le Cloud (Linux)
         subprocess.run(["soffice", "--headless", "--convert-to", "pdf", "--outdir", TEMP_DIR, input_path], check=True)
         time.sleep(1)
         nom_base = os.path.splitext(os.path.basename(input_path))[0]
-        return os.path.join(TEMP_DIR, nom_base + ".pdf")
+        return os.path.join(TEMP_DIR, f"{nom_base}.pdf")
     except: return None
 
 def get_base64_file(file_path):
@@ -124,25 +122,32 @@ with tab_client:
         st.markdown(f'<h1 style="text-align:center; color:white; font-size:60px;">{st.session_state.final_m} FCFA</h1>', unsafe_allow_html=True)
         if st.button("LANCER L'IMPRESSION", key="btn_print_final"):
             try:
-                # Création d'un nom unique avec ID pour éviter les doublons bloquants
+                # 1. On crée un nom de fichier sans espaces ni caractères spéciaux
                 file_id = str(uuid.uuid4())[:8]
-                unique_name = f"{file_id}_{os.path.basename(st.session_state.pdf_path)}"
+                clean_name = f"print_{file_id}.pdf"
                 
                 with open(st.session_state.pdf_path, 'rb') as f:
-                    # Envoi vers le seau IMPRESSIONS (vérifie bien les majuscules dans Supabase !)
-                    supabase.storage.from_('IMPRESSIONS').upload(
-                        path=unique_name,
-                        file=f,
-                        file_options={"x-upsert": "true"}
-                    )
+                    # 2. ESSAI AVEC MAJUSCULES (Si ça rate, on tente minuscules)
+                    try:
+                        supabase.storage.from_('IMPRESSIONS').upload(
+                            path=clean_name,
+                            file=f,
+                            file_options={"x-upsert": "true"}
+                        )
+                    except:
+                        f.seek(0) # On rembobine le fichier
+                        supabase.storage.from_('impressions').upload(
+                            path=clean_name,
+                            file=f,
+                            file_options={"x-upsert": "true"}
+                        )
+
                 st.success("✅ Envoyé au Cloud ! L'impression démarre au bureau.")
                 time.sleep(3)
                 st.session_state.step = "upload"
                 st.rerun()
             except Exception as e:
-                # Affiche l'erreur technique réelle pour le diagnostic
                 st.error(f"Détail technique de l'erreur : {e}")
-                st.info("Vérifiez que : 1. Le Bucket est PUBLIC. 2. Les Policies sont sur 'true'.")
 
 with tab_admin:
     pwd = st.text_input("Admin Password", type="password")
