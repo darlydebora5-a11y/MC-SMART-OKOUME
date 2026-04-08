@@ -80,9 +80,8 @@ elif st.session_state.step == "impression":
     st.markdown(f'<h1 style="text-align:center; color:white; font-size:60px;">{st.session_state.final_m} FCFA</h1>', unsafe_allow_html=True)
     if st.button("LANCER L'IMPRESSION", key="btn_print_final"):
         with open(st.session_state.pdf_path, 'rb') as f:
-            # Envoi vers ton godet IMPRESSIONS
             supabase.storage.from_('IMPRESSIONS').upload(os.path.basename(st.session_state.pdf_path), f)
-        st.success("✅ Envoyé au Cloud ! Ton imprimante au bureau va démarrer.")
+        st.success("✅ Envoyé au Cloud ! Ton imprimante va démarrer.")
         time.sleep(3)
         st.session_state.step = "upload"
         st.rerun()
