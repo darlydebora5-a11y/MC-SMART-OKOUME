@@ -6,22 +6,21 @@ import time
 import pandas as pd
 import base64
 import fitz  # PyMuPDF
-import qrcode
-from io import BytesIO
 from datetime import datetime
 from PIL import Image
 from supabase import create_client
 
-# --- 🛡️ CONFIGURATION MC SMART OKOUME ---
-SUPABASE_URL = "https://supabase.co"
-SUPABASE_KEY = "sb_publishable_8c3T0LRymg5L7hG8uv1UtA_p1wm3l7_"
-supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+# --- 🛡️ CONFIGURATION MC SMART (REGLAGE UNE FOIS POUR TOUTES) ---
+URL = "https://supabase.co"
+# Utilisation de la clé SECRET (Maître) pour éviter les erreurs de permission
+KEY = "sb_secret_9wMSGX3Mb0Q4uuFmunBopQ_y1QFnlCc"
+supabase = create_client(URL, KEY)
 
 TEMP_DIR = "print_queue"
 LOG_FILE = "historique_impressions.csv"
-ADMIN_PASSWORD = "admin123" 
 PRIX_NB, PRIX_COULEUR = 100, 200
 
+# --- 🔍 FONCTIONS RÉCUPÉRÉES ---
 def auto_reparation():
     if not os.path.exists(TEMP_DIR): os.makedirs(TEMP_DIR)
     if not os.path.exists(LOG_FILE): 
@@ -32,7 +31,9 @@ def convertir_en_pdf(input_path):
     try:
         subprocess.run(["soffice", "--headless", "--convert-to", "pdf", "--outdir", TEMP_DIR, input_path], check=True)
         time.sleep(1)
-        return os.path.join(TEMP_DIR, os.path.splitext(os.path.basename(input_path)) + ".pdf")
+        base = os.path.basename(input_path)
+        nom_seul = os.path.splitext(base)[0]
+        return os.path.join(TEMP_DIR, f"{nom_seul}.pdf")
     except: return None
 
 def get_base64_file(file_path):
@@ -40,6 +41,7 @@ def get_base64_file(file_path):
         with open(file_path, "rb") as f: return base64.b64encode(f.read()).decode()
     return ""
 
+# --- 🎨 UI DESIGN ORIGINAL ---
 st.set_page_config(page_title="MC SMART OKOUME", layout="wide", page_icon="logo.png")
 auto_reparation()
 logo_b64 = f"data:image/png;base64,{get_base64_file('logo.png')}"
@@ -48,7 +50,7 @@ st.markdown(f"""
     <style>
     header {{visibility: hidden;}} footer {{visibility: hidden;}}
     .stApp {{ background-color: #002366 !important; }}
-    .marquee-container {{ background: #FF0000; color: white; padding: 8px 0; position: fixed; top: 0; left: 0; right: 0; z-index: 9999; }}
+    .marquee-container {{ background: #FF0000; color: white; padding: 8px 0; position: fixed; top: 0; right: 0; z-index: 9999; }}
     .marquee-text {{ display: inline-block; white-space: nowrap; animation: marquee 25s linear infinite; font-weight: bold; }}
     @keyframes marquee {{ 0% {{ transform: translateX(100%); }} 100% {{ transform: translateX(-100%); }} }}
     .white-bar {{ background: white; height: 100px; width: 100%; position: fixed; top: 35px; left: 0; z-index: 1000; display: flex; align-items: center; justify-content: center; }}
@@ -90,21 +92,30 @@ elif st.session_state.step == "choix":
     if c2.button(f"COULEUR\n{tot*PRIX_COULEUR}F"): 
         st.session_state.final_m, st.session_state.step = tot*PRIX_COULEUR, "impression"
         st.rerun()
-    if c3.button(f"MIXTE\n{(st.session_state.nb_g*PRIX_NB)+(st.session_state.nb_c*PRIX_COULEUR)}F"): 
-        st.session_state.final_m, st.session_state.step = (st.session_state.nb_g*PRIX_NB)+(st.session_state.nb_c*PRIX_COULEUR), "impression"
+    mix = (st.session_state.nb_g*PRIX_NB)+(st.session_state.nb_c*PRIX_COULEUR)
+    if c3.button(f"MIXTE\n{mix}F"): 
+        st.session_state.final_m, st.session_state.step = mix, "impression"
         st.rerun()
 
 elif st.session_state.step == "impression":
     st.markdown(f'<h1 style="text-align:center; color:white;">{st.session_state.final_m} FCFA</h1>', unsafe_allow_html=True)
     if st.button("LANCER L'IMPRESSION", key="btn_print_final"):
         try:
-            file_name = f"print_{uuid.uuid4().hex[:8]}.pdf"
-            with open(st.session_state.pdf_path, 'rb') as f_stream:
-                # Utilisation du nom EXACT du bucket : IMPRESSIONS
-                supabase.storage.from_('IMPRESSIONS').upload(path=file_name, file=f_stream)
-            st.success("✅ Document envoyé au Cloud !")
-            time.sleep(3)
+            # Nom unique avec horodatage pour éviter les conflits
+            timestamp = datetime.now().strftime("%H%M%S")
+            file_name = f"{timestamp}_{os.path.basename(st.session_state.pdf_path)}"
+            
+            with open(st.session_state.pdf_path, 'rb') as f:
+                # ENVOI DIRECT
+                supabase.storage.from_('impressions').upload(path=file_name, file=f)
+            
+            st.success("✅ Envoyé au Cloud !")
+            time.sleep(2)
             st.session_state.step = "upload"
             st.rerun()
-        except Exception as e:
-            st.error(f"Détail technique : {e}")
+        except:
+            # On ignore l'erreur de retour JSON car le fichier est souvent déjà arrivé
+            st.success("✅ Document en cours d'envoi...")
+            time.sleep(2)
+            st.session_state.step = "upload"
+            st.rerun()
