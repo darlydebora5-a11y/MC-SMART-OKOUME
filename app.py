@@ -7,7 +7,6 @@ import pandas as pd
 import base64
 import fitz  # PyMuPDF
 import qrcode
-import socket
 from io import BytesIO
 from datetime import datetime
 from PIL import Image
@@ -19,7 +18,7 @@ LOG_FILE = "historique_impressions.csv"
 ADMIN_PASSWORD = "admin123" 
 PRIX_NB, PRIX_COULEUR = 100, 200
 
-# --- 🛠️ FONCTIONS ---
+# --- 🛠️ FONCTIONS LOGIQUE ---
 def auto_reparation():
     for d in [TEMP_DIR, ADS_DIR]:
         if not os.path.exists(d): os.makedirs(d)
@@ -29,7 +28,7 @@ def auto_reparation():
 def convertir_en_pdf(input_path):
     if input_path.lower().endswith(".pdf"): return input_path
     try:
-        # Sur Streamlit Cloud, on utilise LibreOffice installé via packages.txt
+        # Utilise LibreOffice (via packages.txt) pour le Cloud
         subprocess.run(["soffice", "--headless", "--convert-to", "pdf", "--outdir", TEMP_DIR, input_path], check=True)
         time.sleep(1)
         nom_base = os.path.splitext(os.path.basename(input_path))[0]
@@ -48,39 +47,38 @@ auto_reparation()
 logo_raw = get_base64_file("logo.png")
 logo_b64 = f"data:image/png;base64,{logo_raw}" if logo_raw else ""
 
-# --- 🖌️ STYLE CSS (AVEC LOGO EN FOND) ---
+# --- 🖌️ STYLE CSS (BLEU ROI + BOUTONS RONDS) ---
 st.markdown(f"""
     <style>
     header {{visibility: hidden;}} footer {{visibility: hidden;}}
-    .stApp {{
-        background-image: url("{logo_b64}");
-        background-repeat: no-repeat; background-attachment: fixed;
-        background-position: center; background-size: 30%; background-color: #1E1E1E !important;
-    }}
-    .stApp::before {{
-        content: ""; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-        background-color: rgba(0, 0, 0, 0.7); z-index: -1;
-    }}
+    .stApp {{ background-color: #002366 !important; }}
     .marquee-container {{ background: #FF0000; color: white; padding: 8px 0; position: fixed; top: 0; left: 0; right: 0; z-index: 9999; }}
     .marquee-text {{ display: inline-block; white-space: nowrap; animation: marquee 25s linear infinite; font-weight: bold; }}
     @keyframes marquee {{ 0% {{ transform: translateX(100%); }} 100% {{ transform: translateX(-100%); }} }}
     .white-bar {{ background: white; height: 100px; width: 100%; position: fixed; top: 35px; left: 0; z-index: 1000; display: flex; align-items: center; justify-content: center; }}
     
+    /* BOUTONS RONDS CLIENT */
     div.stButton > button {{ 
-        border-radius: 50% !important; height: 150px !important; width: 150px !important; 
-        font-weight: 900 !important; border: 3px solid white !important; 
+        border-radius: 50% !important; height: 160px !important; width: 160px !important; 
+        font-weight: 900 !important; border: 4px solid white !important; 
         background: linear-gradient(145deg, #39B54A, #2E8B3D) !important; color: white !important; 
+        font-size: 18px !important; box-shadow: 0px 4px 15px rgba(0,0,0,0.3);
     }}
+    /* BOUTON IMPRESSION FINAL */
     div.stButton > button[key="btn_print_final"] {{
-        border-radius: 20px !important; height: 100px !important; width: 100% !important; 
-        background-color: #FF0000 !important; font-size: 30px !important; border: 5px solid white !important;
+        border-radius: 20px !important; height: 120px !important; width: 100% !important; 
+        background: #FF0000 !important; font-size: 35px !important;
+        animation: blinker 0.8s linear infinite !important; border: 6px solid white !important;
     }}
+    @keyframes blinker {{ 50% {{ opacity: 0.7; }} }}
     </style>
 """, unsafe_allow_html=True)
 
 st.markdown('<div class="marquee-container"><div class="marquee-text">🚀 MC SMART OKOUME : Système autonome d\'impression. Propriété exclusive de M. MPIGA OKOUMBA MC FRINCK.</div></div>', unsafe_allow_html=True)
-st.markdown(f'<div class="white-bar"><img src="{logo_b64}" style="height:85px;"></div>', unsafe_allow_html=True)
-st.markdown('<div style="margin-top:165px;"></div><h1 style="text-align:center; color:#FFCC00; font-size:55px;">MC SMART OKOUME</h1>', unsafe_allow_html=True)
+if logo_b64:
+    st.markdown(f'<div class="white-bar"><img src="{logo_b64}" style="height:85px;"></div>', unsafe_allow_html=True)
+
+st.markdown('<div style="margin-top:165px;"></div><h1 style="text-align:center; color:#FFCC00; font-size:50px; text-shadow: 2px 2px 4px #000000;">MC SMART OKOUME</h1>', unsafe_allow_html=True)
 
 if 'step' not in st.session_state: st.session_state.step = "upload"
 
@@ -94,6 +92,7 @@ with tab_client:
             with open(p_init, "wb") as t: t.write(f.getbuffer())
             p_pdf = convertir_en_pdf(p_init)
             if p_pdf:
+                # --- DÉTECTION COULEUR / NB (PYMUPDF) ---
                 doc = fitz.open(p_pdf)
                 nb_c, mat = 0, fitz.Matrix(0.1, 0.1)
                 for pg in doc:
@@ -105,7 +104,7 @@ with tab_client:
 
     elif st.session_state.step == "choix":
         tot = st.session_state.nb_c + st.session_state.nb_g
-        st.markdown(f'<div style="background:rgba(0,0,0,0.6); padding:20px; text-align:center; font-size:24px; border-radius:15px; color: white;">📄 {tot} Page(s) ({st.session_state.nb_g} N/B, {st.session_state.nb_c} Couleur)</div>', unsafe_allow_html=True)
+        st.markdown(f'<div style="background:rgba(255,255,255,0.1); padding:20px; text-align:center; font-size:24px; border-radius:15px; border:2px solid white; color: white; margin-bottom:20px;">📄 {tot} Page(s) ({st.session_state.nb_g} N/B, {st.session_state.nb_c} Couleur)</div>', unsafe_allow_html=True)
         c1, c2, c3 = st.columns(3)
         if c1.button(f"N/B\n{tot*PRIX_NB}F"): 
             st.session_state.final_m, st.session_state.type_p, st.session_state.step = tot*PRIX_NB, "NB", "impression"
@@ -119,18 +118,27 @@ with tab_client:
             st.rerun()
 
     elif st.session_state.step == "impression":
-        st.markdown(f'<h2 style="text-align:center; color:white;">TOTAL À PAYER : {st.session_state.final_m} F</h2>', unsafe_allow_html=True)
-        if st.button("LANCER L'IMPRESSION", key="btn_print_final"):
-            st.success("Demande d'impression enregistrée ! (Simulation sur Cloud)")
-            # Ici on enregistre dans le log au lieu de win32print
-            new_log = pd.DataFrame([[str(uuid.uuid4())[:8], datetime.now().strftime("%H:%M"), os.path.basename(st.session_state.pdf_path), st.session_state.nb_c + st.session_state.nb_g, st.session_state.type_p, st.session_state.final_m, "En attente"]], columns=["ID", "Heure", "Fichier", "Pages", "Type", "Montant", "Statut"])
-            df_logs = pd.read_csv(LOG_FILE)
-            pd.concat([df_logs, new_log]).to_csv(LOG_FILE, index=False)
-            time.sleep(3)
+        st.markdown(f'<h1 style="text-align:center; color:white; font-size:60px;">{st.session_state.final_m} FCFA</h1>', unsafe_allow_html=True)
+        
+        # Le bouton d'impression déclenche l'ouverture du PDF sur le téléphone
+        with open(st.session_state.pdf_path, "rb") as f:
+            pdf_bytes = f.read()
+            
+        st.download_button(
+            label="🚀 LANCER L'IMPRESSION",
+            data=pdf_bytes,
+            file_name=os.path.basename(st.session_state.pdf_path),
+            mime="application/pdf",
+            key="btn_print_final",
+            on_click=lambda: st.success("Impression lancée ! Sélectionnez votre imprimante.")
+        )
+        
+        if st.button("RETOUR", use_container_width=True):
             st.session_state.step = "upload"
             st.rerun()
 
 with tab_admin:
-    pwd = st.text_input("Admin", type="password")
+    pwd = st.text_input("ADMIN PASSWORD", type="password")
     if pwd == ADMIN_PASSWORD:
-        st.dataframe(pd.read_csv(LOG_FILE))
+        if os.path.exists(LOG_FILE):
+            st.dataframe(pd.read_csv(LOG_FILE), use_container_width=True)
