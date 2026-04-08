@@ -1,6 +1,7 @@
 import streamlit as st
 import uuid
 import os
+import time
 import pandas as pd
 import fitz  # PyMuPDF
 from datetime import datetime
@@ -8,15 +9,15 @@ from PIL import Image
 from supabase import create_client
 
 # --- 🛡️ CONFIGURATION CLOUD MC ---
-SUPABASE_URL = "TON_URL_ICI"
-SUPABASE_KEY = "TA_CLE_ANON_ICI"
+SUPABASE_URL = "https://supabase.co"
+SUPABASE_KEY = "sb_publishable_8c3T0LRymg5L7hG8uv1UtA_p1wm3l7_"
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 TEMP_DIR = "print_queue"
 LOG_FILE = "historique_impressions.csv"
 PRIX_NB, PRIX_COULEUR = 100, 200
 
-# --- 🖌️ TON STYLE ORIGINAL (BLEU ROI) ---
+# --- 🎨 STYLE ORIGINAL (BLEU ROI) ---
 st.set_page_config(page_title="MC SMART OKOUME", layout="wide")
 st.markdown(f"""
     <style>
@@ -40,7 +41,6 @@ st.markdown(f"""
     </style>
 """, unsafe_allow_html=True)
 
-# --- LOGIQUE DE L'APPLICATION ---
 if 'step' not in st.session_state: st.session_state.step = "upload"
 
 st.markdown('<div class="marquee-container"><div class="marquee-text">🚀 MC SMART OKOUME : Système autonome d\'impression. Propriété exclusive de M. MPIGA OKOUMBA MC FRINCK.</div></div>', unsafe_allow_html=True)
@@ -52,14 +52,12 @@ if st.session_state.step == "upload":
         if not os.path.exists(TEMP_DIR): os.makedirs(TEMP_DIR)
         p_pdf = os.path.join(TEMP_DIR, f.name)
         with open(p_pdf, "wb") as t: t.write(f.getbuffer())
-        
         doc = fitz.open(p_pdf)
         nb_c = 0
         for pg in doc:
             pix = pg.get_pixmap(matrix=fitz.Matrix(0.1, 0.1))
             img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
             if any(abs(r-g)>18 or abs(r-b)>18 for r,g,b in img.getdata()): nb_c += 1
-        
         st.session_state.nb_c, st.session_state.nb_g, st.session_state.pdf_path, st.session_state.step = nb_c, len(doc)-nb_c, p_pdf, "choix"
         st.rerun()
 
@@ -79,12 +77,12 @@ elif st.session_state.step == "choix":
         st.rerun()
 
 elif st.session_state.step == "impression":
-    st.markdown(f'<h1 style="text-align:center; color:white;">{st.session_state.final_m} FCFA</h1>', unsafe_allow_html=True)
+    st.markdown(f'<h1 style="text-align:center; color:white; font-size:60px;">{st.session_state.final_m} FCFA</h1>', unsafe_allow_html=True)
     if st.button("LANCER L'IMPRESSION", key="btn_print_final"):
         with open(st.session_state.pdf_path, 'rb') as f:
-            # ENVOI VERS TON CLOUD SUPABASE
-            supabase.storage.from_('impressions').upload(os.path.basename(st.session_state.pdf_path), f)
-        st.success("✅ Document envoyé à ton Cloud ! Ton imprimante va démarrer.")
+            # Envoi vers ton godet IMPRESSIONS
+            supabase.storage.from_('IMPRESSIONS').upload(os.path.basename(st.session_state.pdf_path), f)
+        st.success("✅ Envoyé au Cloud ! Ton imprimante au bureau va démarrer.")
         time.sleep(3)
         st.session_state.step = "upload"
         st.rerun()
