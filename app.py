@@ -7,16 +7,14 @@ import pandas as pd
 import base64
 import fitz  # PyMuPDF
 import qrcode
-import socket
-from io import BytesIO
 from datetime import datetime
 from PIL import Image
 from supabase import create_client
 
 # --- 🛡️ CONFIGURATION MC SMART OKOUME ---
-# L'URL a été complétée avec ton identifiant projet unique
-SUPABASE_URL = "https://hnnnauclluoyatfscvqy.supabase.co"
-SUPABASE_KEY = "sb_publishable_8c3T0LRymg5L7hG8uv1UtA_p1wm3l7_"
+# Nettoyage strict de l'URL pour éviter l'erreur [Errno -2]
+SUPABASE_URL = "https://supabase.co".strip()
+SUPABASE_KEY = "sb_publishable_8c3T0LRymg5L7hG8uv1UtA_p1wm3l7_".strip()
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 TEMP_DIR = "print_queue"
@@ -25,7 +23,7 @@ LOG_FILE = "historique_impressions.csv"
 ADMIN_PASSWORD = "admin123" 
 PRIX_NB, PRIX_COULEUR = 100, 200
 
-# --- 🔍 FONCTIONS RÉCUPÉRÉES DE TON ORIGINAL ---
+# --- 🔍 FONCTIONS ---
 def auto_reparation():
     for d in [TEMP_DIR, ADS_DIR]:
         if not os.path.exists(d): os.makedirs(d)
@@ -37,7 +35,8 @@ def convertir_en_pdf(input_path):
     try:
         subprocess.run(["soffice", "--headless", "--convert-to", "pdf", "--outdir", TEMP_DIR, input_path], check=True)
         time.sleep(1)
-        return os.path.join(TEMP_DIR, os.path.splitext(os.path.basename(input_path))[0] + ".pdf")
+        nom_base = os.path.splitext(os.path.basename(input_path))[0]
+        return os.path.join(TEMP_DIR, nom_base + ".pdf")
     except: return None
 
 def get_base64_file(file_path):
@@ -50,8 +49,10 @@ st.set_page_config(page_title="MC SMART OKOUME", layout="wide", page_icon="logo.
 auto_reparation()
 
 video_b64 = get_base64_file("video.mp4")
-logo_b64 = f"data:image/png;base64,{get_base64_file('logo.png')}"
+logo_raw = get_base64_file("logo.png")
+logo_b64 = f"data:image/png;base64,{logo_raw}" if logo_raw else ""
 
+# --- 🖌️ STYLE CSS ---
 st.markdown(f"""
     <style>
     header {{visibility: hidden;}} footer {{visibility: hidden;}}
@@ -80,7 +81,9 @@ if video_b64:
     st.markdown(f'<video autoplay muted loop playsinline id="bgVideo"><source src="data:video/mp4;base64,{video_b64}" type="video/mp4"></video>', unsafe_allow_html=True)
 
 st.markdown('<div class="marquee-container"><div class="marquee-text">🚀 MC SMART OKOUME : Système autonome d\'impression. Propriété exclusive de M. MPIGA OKOUMBA MC FRINCK.</div></div>', unsafe_allow_html=True)
-st.markdown(f'<div class="white-bar"><img src="{logo_b64}" style="height:85px;"></div>', unsafe_allow_html=True)
+if logo_b64:
+    st.markdown(f'<div class="white-bar"><img src="{logo_b64}" style="height:85px;"></div>', unsafe_allow_html=True)
+
 st.markdown('<div style="margin-top:165px;"></div><h1 style="text-align:center; color:#FFCC00; font-size:55px;">MC SMART OKOUME</h1>', unsafe_allow_html=True)
 
 if 'step' not in st.session_state: st.session_state.step = "upload"
@@ -124,26 +127,24 @@ with tab_client:
         if st.button("LANCER L'IMPRESSION", key="btn_print_final"):
             try:
                 with open(st.session_state.pdf_path, 'rb') as f:
-                    # On utilise le nom du fichier nettoyé
                     file_name = os.path.basename(st.session_state.pdf_path)
-                    
-                    res = supabase.storage.from_('IMPRESSIONS').upload(
+                    supabase.storage.from_('IMPRESSIONS').upload(
                         path=file_name,
                         file=f,
                         file_options={"x-upsert": "true"}
                     )
                 st.success("✅ Document envoyé au Cloud !")
                 
-                # Enregistrement dans l'historique
+                # Historique
                 new_log = pd.DataFrame([[str(uuid.uuid4())[:8], datetime.now().strftime("%H:%M"), file_name, st.session_state.nb_c + st.session_state.nb_g, st.session_state.type_p, st.session_state.final_m, "PRET"]], columns=["ID", "Heure", "Fichier", "Pages", "Type", "Montant", "Statut"])
-                pd.concat([pd.read_csv(LOG_FILE), new_log]).to_csv(LOG_FILE, index=False)
+                if os.path.exists(LOG_FILE):
+                    pd.concat([pd.read_csv(LOG_FILE), new_log]).to_csv(LOG_FILE, index=False)
                 
                 time.sleep(2)
                 st.session_state.step = "upload"
                 st.rerun()
             except Exception as e:
-                # Ceci nous dira si c'est un problème de "Bucket not found" ou "Invalid Key"
-                st.error(f"Détail technique de l'erreur : {e}")
+                st.error(f"Erreur d'envoi : {e}")
 
 with tab_admin:
     pwd = st.text_input("Admin Password", type="password")
