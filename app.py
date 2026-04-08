@@ -34,8 +34,7 @@ def convertir_en_pdf(input_path):
     try:
         subprocess.run(["soffice", "--headless", "--convert-to", "pdf", "--outdir", TEMP_DIR, input_path], check=True)
         time.sleep(1)
-        nom_base = os.path.splitext(os.path.basename(input_path))[0]
-        return os.path.join(TEMP_DIR, f"{nom_base}.pdf")
+        return os.path.join(TEMP_DIR, os.path.splitext(os.path.basename(input_path))[0] + ".pdf")
     except: return None
 
 def get_base64_file(file_path):
@@ -43,7 +42,7 @@ def get_base64_file(file_path):
         with open(file_path, "rb") as f: return base64.b64encode(f.read()).decode()
     return ""
 
-# --- 🎨 INITIALISATION UI (DESIGN ORIGINAL INTÉGRAL) ---
+# --- 🎨 INITIALISATION UI (DESIGN ORIGINAL) ---
 st.set_page_config(page_title="MC SMART OKOUME", layout="wide", page_icon="logo.png")
 auto_reparation()
 
@@ -59,7 +58,6 @@ st.markdown(f"""
     .marquee-text {{ display: inline-block; white-space: nowrap; animation: marquee 25s linear infinite; font-weight: bold; }}
     @keyframes marquee {{ 0% {{ transform: translateX(100%); }} 100% {{ transform: translateX(-100%); }} }}
     .white-bar {{ background: white; height: 100px; width: 100%; position: fixed; top: 35px; left: 0; z-index: 1000; display: flex; align-items: center; justify-content: center; }}
-    
     div.stButton > button {{ 
         border-radius: 50% !important; height: 150px !important; width: 150px !important; 
         font-weight: 900 !important; border: 3px solid white !important; 
@@ -68,7 +66,7 @@ st.markdown(f"""
     div.stButton > button[key="btn_print_final"] {{
         border-radius: 20px !important; height: 120px !important; width: 100% !important; 
         background-color: #FF0000 !important; font-size: 35px !important;
-        animation: blinker 0.6s linear infinite !important; border: 8px solid white !important;
+        animation: blinker 0.8s linear infinite !important; border: 8px solid white !important;
     }}
     @keyframes blinker {{ 50% {{ opacity: 0.5; background-color: #990000; }} }}
     </style>
@@ -122,28 +120,17 @@ with tab_client:
         st.markdown(f'<h1 style="text-align:center; color:white; font-size:60px;">{st.session_state.final_m} FCFA</h1>', unsafe_allow_html=True)
         if st.button("LANCER L'IMPRESSION", key="btn_print_final"):
             try:
-                # 1. On crée un nom de fichier sans espaces ni caractères spéciaux
-                file_id = str(uuid.uuid4())[:8]
-                clean_name = f"print_{file_id}.pdf"
-                
+                unique_name = f"{uuid.uuid4().hex[:8]}.pdf"
                 with open(st.session_state.pdf_path, 'rb') as f:
-                    # 2. ESSAI AVEC MAJUSCULES (Si ça rate, on tente minuscules)
+                    # TESTER LE NOM DU BUCKET EN MINUSCULES SI LES MAJUSCULES ÉCHOUENT
                     try:
-                        supabase.storage.from_('IMPRESSIONS').upload(
-                            path=clean_name,
-                            file=f,
-                            file_options={"x-upsert": "true"}
-                        )
+                        supabase.storage.from_('IMPRESSIONS').upload(path=unique_name, file=f)
                     except:
-                        f.seek(0) # On rembobine le fichier
-                        supabase.storage.from_('impressions').upload(
-                            path=clean_name,
-                            file=f,
-                            file_options={"x-upsert": "true"}
-                        )
-
-                st.success("✅ Envoyé au Cloud ! L'impression démarre au bureau.")
-                time.sleep(3)
+                        f.seek(0)
+                        supabase.storage.from_('impressions').upload(path=unique_name, file=f)
+                
+                st.success("✅ Envoyé au Cloud !")
+                time.sleep(2)
                 st.session_state.step = "upload"
                 st.rerun()
             except Exception as e:
