@@ -1,34 +1,66 @@
+import streamlit as st
 import os
-import time
-import subprocess
+import base64
+from pydrive2.auth import GoogleAuth
+from pydrive2.drive import GoogleDrive
 
-# CHEMIN DE TON DOSSIER GOOGLE DRIVE SUR TON PC
-# Exemple : "C:/Users/TonNom/Google Drive/Mon Drive/Impressions_MC_Smart"
-WATCH_DIR = r"METS_ICI_LE_CHEMIN_DE_TON_DOSSIER_DRIVE"
+# --- DESIGN MC SMART ---
+st.set_page_config(page_title="MC SMART OKOUME", layout="wide")
 
-print("🤖 ROBOT MC SMART (DRIVE SYNC) ACTIF...")
+def get_base64_file(file_path):
+    if os.path.exists(file_path):
+        with open(file_path, "rb") as f: return base64.b64encode(f.read()).decode()
+    return ""
 
-while True:
-    # Liste les fichiers dans le dossier
-    files = [f for f in os.listdir(WATCH_DIR) if os.path.isfile(os.path.join(WATCH_DIR, f))]
-    
-    for file_name in files:
-        file_path = os.path.join(WATCH_DIR, file_name)
-        
-        print(f"🖨️ Impression automatique de : {file_name}")
-        
-        # Commande Windows pour imprimer
-        os.startfile(file_path, "print")
-        
-        # Attendre 10 secondes pour laisser l'imprimante travailler
-        time.sleep(10)
-        
-        # Déplacer ou supprimer le fichier pour ne pas le réimprimer
-        # Ici on le supprime (il restera dans la corbeille de Google Drive au cas où)
-        try:
-            os.remove(file_path)
-            print(f"✅ Nettoyage terminé.")
-        except:
-            pass
+logo_b64 = get_base64_file('logo.png')
 
-    time.sleep(5) # Vérifie toutes les 5 secondes
+# Style CSS Original
+st.markdown(f"""
+    <style>
+    header {{visibility: hidden;}} footer {{visibility: hidden;}}
+    .stApp {{ background-color: #002366 !important; color: white; }}
+    .marquee-container {{ background: #FF0000; color: white; padding: 10px; border-radius: 10px; text-align: center; font-weight: bold; overflow: hidden; }}
+    .logo-container {{ display: flex; justify-content: center; margin: 20px 0; }}
+    .circular-logo {{ width: 150px; height: 150px; border-radius: 50%; border: 4px solid #FF0000; background: white; object-fit: cover; }}
+    .card {{ background: white; padding: 30px; border-radius: 15px; color: #002366; }}
+    div.stButton > button {{ width: 100%; background-color: #FF0000 !important; color: white !important; font-weight: bold; border-radius: 8px; height: 3.5em; border: none; }}
+    </style>
+    <div class="marquee-container"><marquee>🚀 MC SMART OKOUME - IMPRESSION AUTOMATIQUE 24/7 🚀</marquee></div>
+""", unsafe_allow_html=True)
+
+if logo_b64:
+    st.markdown(f'<div class="logo-container"><img src="data:image/png;base64,{logo_b64}" class="circular-logo"></div>', unsafe_allow_html=True)
+
+with st.container():
+    st.markdown('<div class="card">', unsafe_allow_html=True)
+    st.subheader("📄 Déposez votre document")
+    uploaded_file = st.file_uploader("", type=["pdf", "png", "jpg"])
+
+    if uploaded_file:
+        if st.button("LANCER L'IMPRESSION"):
+            try:
+                # Authentification Google Drive
+                gauth = GoogleAuth()
+                # Charge les credentials ou ouvre une fenêtre de connexion au premier lancement
+                gauth.LocalWebserverAuth() 
+                drive = GoogleDrive(gauth)
+
+                # Sauvegarde temporaire
+                temp_name = uploaded_file.name
+                with open(temp_name, "wb") as f:
+                    f.write(uploaded_file.getbuffer())
+
+                # Envoi dans le dossier spécifique (ID du dossier 'Impressions_MC_Smart')
+                # Remplace 'TON_ID_DE_DOSSIER' par l'ID visible dans l'URL de ton dossier sur ton navigateur
+                file_drive = drive.CreateFile({
+                    'title': temp_name,
+                    'parents': [{'id': 'TON_ID_DE_DOSSIER_ICI'}] 
+                })
+                file_drive.SetContentFile(temp_name)
+                file_drive.Upload()
+
+                st.success("✅ Document envoyé ! L'imprimante va démarrer.")
+                os.remove(temp_name)
+            except Exception as e:
+                st.error(f"Erreur de connexion : {e}")
+    st.markdown('</div>', unsafe_allow_html=True)
